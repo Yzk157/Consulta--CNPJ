@@ -10,14 +10,7 @@ async function fetchCNPJ(req, res) {
         }
 
         const data = await response.json();
-
-        const resultado = {
-            cnpj: data.cnpj,
-            razao_social: data.razao_social,
-            situacao_cadastral: data.situacao_cadastral
-        };
-
-        return res.json(resultado);
+        return res.json(data);
     } catch {
         return res.status(502).send('Falha temporária em nossos serviços, por favor tente novamente dentro de 1 hora.');
     }

@@ -1,307 +1,847 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel CNPJ · Consulta de empresas</title>
+<style>
+  /* ---------------------------------------------------------
+     RESET / BASE
+     - box-sizing global evita que padding/borda somem largura
+       além do que foi definido, uma das causas mais comuns de
+       overflow horizontal.
+     - nada aqui usa 100vw: 100vw inclui a largura da barra de
+       rolagem em alguns navegadores e "vaza" alguns pixels para
+       a direita. Tudo é dimensionado em 100% (relativo ao pai).
+  --------------------------------------------------------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; }
 
-    <title>Consulta CNPJ</title>
+  :root{
+    --bg: #090c0e;
+    --bg-elevated: #141a1e;
+    --bg-input: #1a2126;
+    --border: #212a2f;
+    --border-strong: #303b42;
+    --text-primary: #f2f5f6;
+    --text-secondary: #97a2a8;
+    --text-tertiary: #5f6b71;
 
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+    --green: #34c261;
+    --green-strong: #4bd977;
+    --green-soft: rgba(52, 194, 97, 0.14);
+    --green-border: rgba(52, 194, 97, 0.4);
 
-        body {
-            min-height: 100vh;
+    --blue: #4c8dff;
+    --blue-soft: rgba(76, 141, 255, 0.14);
 
-            display: flex;
-            justify-content: center;
-            align-items: center;
+    --red: #ef6b63;
+    --red-soft: rgba(239, 107, 99, 0.1);
 
-            font-family: Arial, sans-serif;
-            color: white;
+    --radius-sm: 6px;
+    --radius-md: 10px;
 
-            background:
-                radial-gradient(circle at 20% 30%, #3b0a70 0%, transparent 30%),
-                radial-gradient(circle at 80% 70%, #082567 0%, transparent 30%),
-                radial-gradient(circle at 50% 50%, #15002b 0%, transparent 60%),
-                #02010a;
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
 
-            overflow: hidden;
-        }
+  html { background: var(--bg); }
 
-        /* Estrelas */
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
+  body{
+    min-height: 100vh;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
 
-            background-image:
-                radial-gradient(white 1px, transparent 1px),
-                radial-gradient(white 1px, transparent 1px);
+  /* Container central: nunca maior que a viewport, largura sempre
+     relativa (100%) e limitada por max-width. */
+  .shell{
+    width: 100%;
+    max-width: 1080px;
+    margin: 0 auto;
+    padding-left: clamp(16px, 4vw, 28px);
+    padding-right: clamp(16px, 4vw, 28px);
+  }
 
-            background-size: 90px 90px, 140px 140px;
-            background-position: 10px 20px, 50px 70px;
+  a { color: var(--blue); }
 
-            opacity: 0.35;
-            pointer-events: none;
-        }
+  /* Foco visível — o azul entra aqui como o "pequeno detalhe" pedido */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible{
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+  }
 
-        .container {
-            position: relative;
-            z-index: 1;
+  @media (prefers-reduced-motion: reduce){
+    *{ animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
 
-            width: 90%;
-            max-width: 450px;
+  /* Linha de destaque no topo — elemento estático (não fixed/absolute),
+     então soma 3px normais ao fluxo da página e nunca gera overflow. */
+  .accent-bar{
+    height: 3px;
+    width: 100%;
+    background: linear-gradient(90deg, var(--green) 0%, var(--green) 55%, var(--blue) 100%);
+  }
 
-            padding: 40px;
+  /* ---------------------------------------------------------
+     HEADER
+  --------------------------------------------------------- */
+  .topbar{
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-elevated);
+  }
+  .topbar-inner{
+    height: 58px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .brand{
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-width: 0;
+  }
+  .brand-mark{ flex: none; display: block; }
+  .brand-name{
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-status{
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+  }
+  .status-dot{
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green-strong);
+    box-shadow: 0 0 0 3px var(--green-soft);
+  }
+  @media (max-width: 480px){
+    .topbar-status span.status-text{ display: none; }
+  }
 
-            background: rgba(10, 5, 30, 0.75);
+  /* ---------------------------------------------------------
+     HERO — faixa com o título da página, separada do corpo
+     por cor de fundo própria (evita a sensação de "vazio" entre
+     o cabeçalho e o conteúdo).
+  --------------------------------------------------------- */
+  .hero{
+    background: var(--bg-elevated);
+    border-bottom: 1px solid var(--border);
+  }
+  .hero-inner{
+    padding-top: 26px;
+    padding-bottom: 22px;
+  }
+  .hero h1{
+    margin: 0 0 6px;
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+  .hero p{
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    max-width: 60ch;
+  }
 
-            border: 1px solid rgba(150, 100, 255, 0.4);
-            border-radius: 20px;
+  /* ---------------------------------------------------------
+     GRID PRINCIPAL
+  --------------------------------------------------------- */
+  .painel-grid{
+    display: grid;
+    grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
+    gap: 14px;
+    align-items: start;
+    padding-top: 18px;
+    padding-bottom: 36px;
+  }
+  @media (max-width: 760px){
+    .painel-grid{ grid-template-columns: minmax(0, 1fr); }
+  }
 
-            box-shadow:
-                0 0 30px rgba(110, 50, 255, 0.3),
-                inset 0 0 30px rgba(100, 50, 255, 0.05);
+  .card{
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 17px 18px;
+    min-width: 0; /* impede que texto longo empurre a grade e cause overflow */
+    box-shadow: 0 10px 24px -20px rgba(0,0,0,0.8);
+  }
 
-            backdrop-filter: blur(10px);
-        }
+  /* ---------------------------------------------------------
+     PAINEL DE CONSULTA
+  --------------------------------------------------------- */
+  .consulta-card h2{
+    margin: 0 0 4px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+  }
+  .card-desc{
+    margin: 0 0 16px;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
 
-        h1 {
-            text-align: center;
-            margin-bottom: 10px;
+  .field{ margin-bottom: 13px; }
+  .field label{
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
 
-            font-size: 30px;
+  .field select,
+  .field input[type="text"]{
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+  }
+  .field input[type="text"]{ font-family: var(--font-mono); letter-spacing: 0.2px; }
 
-            background: linear-gradient(
-                90deg,
-                #8f5cff,
-                #d8b4ff,
-                #6ea8ff
-            );
+  .field select:hover,
+  .field input[type="text"]:hover{ border-color: #3a444d; }
 
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
+  .field select:focus,
+  .field input[type="text"]:focus{
+    border-color: var(--green);
+    outline: none;
+  }
 
-        p {
-            text-align: center;
-            margin-bottom: 30px;
+  .field select{
+    appearance: none;
+    -webkit-appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+      linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 30px;
+  }
 
-            color: #aaa4bd;
-            font-size: 14px;
-        }
+  .field-erro{
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--red);
+  }
 
-        label {
-            display: block;
-            margin-bottom: 8px;
+  button[type="submit"]{
+    width: 100%;
+    padding: 11px 16px;
+    margin-top: 6px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--green);
+    color: #06130c;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+  }
+  button[type="submit"]:hover:not(:disabled){
+    background: var(--green-strong);
+    box-shadow: 0 8px 18px -10px rgba(52,194,97,0.55);
+  }
+  button[type="submit"]:active:not(:disabled){ transform: translateY(1px); box-shadow: none; }
+  button[type="submit"]:disabled{
+    background: #23422f;
+    color: #6d8779;
+    cursor: default;
+  }
 
-            color: #d8d0e8;
-            font-size: 14px;
-        }
+  .spinner-inline{
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid rgba(6,19,12,0.35);
+    border-top-color: #06130c;
+    display: inline-block;
+    vertical-align: -2px;
+    margin-right: 7px;
+    animation: girar 0.7s linear infinite;
+  }
+  button:disabled .spinner-inline{
+    border-color: rgba(109,135,121,0.35);
+    border-top-color: #6d8779;
+  }
 
-        [hidden] {
-            display: none !important;
-        }
+  @keyframes girar{ to { transform: rotate(360deg); } }
 
-        input {
-            width: 100%;
+  /* ---------------------------------------------------------
+     PAINEL DE RESULTADO — estados
+  --------------------------------------------------------- */
+  .resultado-card{ min-height: 250px; }
+  .resultado-card > h2.resultado-titulo{
+    margin: 0 0 14px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.1px;
+  }
 
-            padding: 14px 16px;
+  .estado{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    padding: 34px 16px;
+    color: var(--text-secondary);
+  }
+  .estado svg{ color: var(--text-tertiary); }
+  .estado strong{
+    color: var(--text-primary);
+    font-size: 14.5px;
+    font-weight: 700;
+  }
+  .estado p{ margin: 0; font-size: 13px; max-width: 34ch; }
 
-            border: 1px solid #49356b;
-            border-radius: 10px;
+  .estado-carregando svg{ color: var(--green); animation: girar 0.9s linear infinite; }
 
-            background: rgba(255, 255, 255, 0.05);
+  .alerta-erro{
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: var(--red-soft);
+    border: 1px solid rgba(239,107,99,0.35);
+    border-left: 3px solid var(--red);
+    border-radius: var(--radius-sm);
+  }
+  .alerta-erro svg{ flex: none; color: var(--red); margin-top: 1px; }
+  .alerta-erro strong{ display: block; font-size: 13.5px; margin-bottom: 2px; }
+  .alerta-erro p{ margin: 0; font-size: 12.5px; color: var(--text-secondary); overflow-wrap: anywhere; }
 
-            color: white;
-            font-size: 16px;
+  /* Resultado preenchido */
+  .resultado-header{
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .resultado-header h2{
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    overflow-wrap: anywhere;
+  }
+  .resultado-sub{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+  }
+  .cnpj-valor{
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 3px 8px;
+  }
+  .btn-copiar{
+    border: 1px solid var(--border-strong);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-sm);
+    font-size: 11.5px;
+    font-family: inherit;
+    padding: 3px 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .btn-copiar:hover{ border-color: var(--blue); color: var(--text-primary); }
 
-            outline: none;
+  .status-pill{
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+  .status-pill::before{
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .status-pill.ok{ background: var(--green-soft); color: var(--green-strong); }
+  .status-pill.ok::before{ background: var(--green-strong); }
+  .status-pill.alerta{ background: var(--red-soft); color: var(--red); }
+  .status-pill.alerta::before{ background: var(--red); }
+  .status-pill.neutro{ background: rgba(151,162,168,0.12); color: var(--text-secondary); }
+  .status-pill.neutro::before{ background: var(--text-secondary); }
 
-            transition: 0.3s;
-        }
+  .info-grid{
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 12px 16px;
+  }
+  .info-item{ min-width: 0; }
+  .info-item .info-label{
+    display: block;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-bottom: 3px;
+  }
+  .info-item .info-valor{
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    overflow-wrap: anywhere;
+  }
 
-        input::placeholder {
-            color: #777080;
-        }
-
-        input:focus {
-            border-color: #8f5cff;
-
-            box-shadow:
-                0 0 15px rgba(143, 92, 255, 0.35);
-
-            background: rgba(255, 255, 255, 0.08);
-        }
-
-        select {
-            width: 100%;
-            margin-bottom: 22px;
-            padding: 14px 44px 14px 16px;
-            border: 1px solid #49356b;
-            border-radius: 10px;
-            background-color: rgba(255, 255, 255, 0.08);
-            background-image: linear-gradient(45deg, transparent 50%, #d8b4ff 50%),
-                linear-gradient(135deg, #d8b4ff 50%, transparent 50%);
-            background-position: calc(100% - 20px) 20px, calc(100% - 14px) 20px;
-            background-size: 6px 6px, 6px 6px;
-            background-repeat: no-repeat;
-            color: white;
-            font-size: 16px;
-            outline: none;
-            appearance: none;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-
-        select:focus {
-            border-color: #8f5cff;
-            box-shadow: 0 0 15px rgba(143, 92, 255, 0.35);
-        }
-
-        option {
-            background: #15002b;
-            color: white;
-        }
-
-        button {
-            width: 100%;
-
-            margin-top: 20px;
-            padding: 14px;
-
-            border: none;
-            border-radius: 10px;
-
-            background: linear-gradient(
-                90deg,
-                #6c35d9,
-                #8f5cff
-            );
-
-            color: white;
-            font-size: 16px;
-            font-weight: bold;
-
-            cursor: pointer;
-
-            transition: 0.3s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-
-            box-shadow:
-                0 0 20px rgba(143, 92, 255, 0.5);
-        }
-
-        button:active {
-            transform: translateY(0);
-        }
-
-        #resultado {
-            display: none;
-            margin-top: 24px;
-            padding-top: 20px;
-            border-top: 1px solid rgba(150, 100, 255, 0.3);
-            color: #d8d0e8;
-            line-height: 1.8;
-        }
-
-        #mensagem {
-            display: block;
-            margin-top: 12px;
-            color: #ffb4b4;
-        }
-    </style>
+  [hidden]{ display: none !important; }
+</style>
 </head>
-
 <body>
 
-    <main class="container">
+  <div class="accent-bar" aria-hidden="true"></div>
 
-        <h1>Painel Consulta</h1>
+  <header class="topbar">
+    <div class="shell topbar-inner">
+      <div class="brand">
+        <svg class="brand-mark" width="22" height="22" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="1.5" y="6.5" width="9" height="9" rx="2" stroke="#4bd977" stroke-width="1.8"/>
+          <rect x="9.5" y="1.5" width="9" height="9" rx="2" fill="#4c8dff" fill-opacity="0.18" stroke="#4c8dff" stroke-width="1.8"/>
+        </svg>
+        <span class="brand-name">Painel CNPJ</span>
+      </div>
+      <div class="topbar-status">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span class="status-text">Ambiente de consulta</span>
+      </div>
+    </div>
+  </header>
 
-        <p>
-            Consulte informações de uma empresa ou pessoa fisica.
-        </p>
+  <section class="hero">
+    <div class="shell hero-inner">
+      <h1>Consulta de empresas</h1>
+      <p>Informe o CNPJ para verificar os dados cadastrais de uma empresa.</p>
+    </div>
+  </section>
 
-        <form action="/" method="POST">
+<main class="shell painel-grid">
 
-            <label for="tipoConsulta">
-                Tipo de consulta
-            </label>
+    <section class="card consulta-card" aria-labelledby="consulta-heading">
+      <h2 id="consulta-heading">Consultar empresa</h2>
+      <p class="card-desc">Selecione o tipo de consulta e informe o CNPJ da empresa.</p>
 
-            <select id="tipoConsulta" name="tipo">
-                <option value="cnpj">CNPJ</option>
-            </select>
+      <form id="formConsulta" novalidate>
+        <div class="field">
+          <label for="tipoConsulta">Tipo de consulta</label>
+          <select id="tipoConsulta" name="tipo">
+            <option value="cnpj">CNPJ</option>
+          </select>
+        </div>
 
-            <label for="cnpj" id="labelCnpj">
-                CNPJ
-            </label>
+        <div class="field">
+          <label for="cnpj">CNPJ</label>
+          <input
+            type="text"
+            id="cnpj"
+            name="cnpj"
+            inputmode="numeric"
+            autocomplete="off"
+            placeholder="00.000.000/0000-00"
+            maxlength="18"
+            required
+          >
+          <div class="field-erro" id="cnpjErro" hidden>Informe um CNPJ com 14 dígitos.</div>
+        </div>
 
-            <input
-                type="text"
-                id="cnpj"
-                name="cnpj"
-                placeholder="00.000.000/0000-00"
-                required
-            >
+        <button type="submit" id="btnConsultar">
+          <span id="btnConsultarLabel">Consultar empresa</span>
+        </button>
+      </form>
+    </section>
 
-            <button type="submit">
-                Consultar
-            </button>
+    <section class="card resultado-card" aria-live="polite">
+      <h2 class="resultado-titulo">Resultado da consulta</h2>
 
-        </form>
+      <div id="estadoInicial" class="estado">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect x="4" y="3" width="12" height="18" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M8 8h4M8 11.5h4M8 15h2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="17.5" cy="17.5" r="3.2" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M19.8 19.8L22 22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <strong>Nenhuma consulta realizada</strong>
+        <p>Realize uma consulta para visualizar os dados da empresa.</p>
+      </div>
 
-        <section id="resultado" aria-live="polite">
-            <strong>Resultado da consulta</strong>
-            <pre id="dadosResultado"></pre>
-            <span id="mensagem"></span>
-        </section>
+      <div id="estadoCarregando" class="estado" hidden>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="2.5"/>
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+        <strong>Consultando dados da empresa…</strong>
+        <p>Isso costuma levar apenas alguns segundos.</p>
+      </div>
 
-    </main>
+      <div id="estadoErro" class="alerta-erro" hidden>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M12 3.5 21.5 20h-19L12 3.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+          <path d="M12 10v4.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="12" cy="17" r="0.9" fill="currentColor"/>
+        </svg>
+        <div>
+          <strong>Não foi possível realizar a consulta.</strong>
+          <p id="erroMensagem">Tente novamente em instantes.</p>
+        </div>
+      </div>
 
-    <script>
-        const formulario = document.querySelector('form');
-        const resultado = document.querySelector('#resultado');
-        const tipoConsulta = document.querySelector('#tipoConsulta');
-        const campoCnpj = document.querySelector('#cnpj');
-        const dadosResultado = document.querySelector('#dadosResultado');
-        const mensagem = document.querySelector('#mensagem');
+      <div id="estadoResultado" class="resultado-conteudo" hidden>
+        <div class="resultado-header">
+          <h2 id="empresaNome"></h2>
+          <div class="resultado-sub">
+            <span class="cnpj-valor" id="empresaCnpj"></span>
+            <button type="button" class="btn-copiar" id="btnCopiarCnpj">Copiar</button>
+            <span class="status-pill neutro" id="empresaSituacao" hidden></span>
+          </div>
+        </div>
+        <div class="info-grid" id="infoGrid"></div>
+      </div>
+    </section>
 
-        formulario.addEventListener('submit', async (evento) => {
-            evento.preventDefault();
-            resultado.style.display = 'block';
-            mensagem.textContent = 'Consultando...';
+  </main>
 
-            try {
-                const resposta = await fetch('/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        tipo: tipoConsulta.value,
-                        cnpj: campoCnpj.value
-                    })
-                });
+  <script>
+  (function(){
+    "use strict";
 
-                if (!resposta.ok) {
-                    throw new Error(await resposta.text());
-                }
+    var formulario = document.getElementById('formConsulta');
+    var tipoConsulta = document.getElementById('tipoConsulta');
+    var campoCnpj = document.getElementById('cnpj');
+    var cnpjErro = document.getElementById('cnpjErro');
+    var botao = document.getElementById('btnConsultar');
+    var botaoLabel = document.getElementById('btnConsultarLabel');
 
-                const dados = await resposta.json();
-                dadosResultado.textContent = JSON.stringify(dados, null, 2);
-                mensagem.textContent = '';
-            } catch (erro) {
-                mensagem.textContent = erro.message || 'Não foi possível realizar a consulta.';
+    var estadoInicial = document.getElementById('estadoInicial');
+    var estadoCarregando = document.getElementById('estadoCarregando');
+    var estadoErro = document.getElementById('estadoErro');
+    var erroMensagem = document.getElementById('erroMensagem');
+    var estadoResultado = document.getElementById('estadoResultado');
+
+    var empresaNome = document.getElementById('empresaNome');
+    var empresaCnpj = document.getElementById('empresaCnpj');
+    var empresaSituacao = document.getElementById('empresaSituacao');
+    var infoGrid = document.getElementById('infoGrid');
+    var btnCopiarCnpj = document.getElementById('btnCopiarCnpj');
+
+    var consultando = false;
+
+    // ---------- máscara de CNPJ ----------
+    function mascararCnpj(valor){
+      var digitos = valor.replace(/\D/g, '').slice(0, 14);
+      if (digitos.length > 12) {
+        return digitos.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{0,2}).*/, '$1.$2.$3/$4-$5');
+      }
+      if (digitos.length > 8) {
+        return digitos.replace(/^(\d{2})(\d{3})(\d{3})(\d{0,4})/, '$1.$2.$3/$4');
+      }
+      if (digitos.length > 5) {
+        return digitos.replace(/^(\d{2})(\d{3})(\d{0,3})/, '$1.$2.$3');
+      }
+      if (digitos.length > 2) {
+        return digitos.replace(/^(\d{2})(\d{0,3})/, '$1.$2');
+      }
+      return digitos;
+    }
+
+    campoCnpj.addEventListener('input', function(e){
+      e.target.value = mascararCnpj(e.target.value);
+      cnpjErro.hidden = true;
+    });
+
+    // ---------- exibição de estados ----------
+    function mostrarEstado(nome){
+      estadoInicial.hidden = nome !== 'inicial';
+      estadoCarregando.hidden = nome !== 'carregando';
+      estadoErro.hidden = nome !== 'erro';
+      estadoResultado.hidden = nome !== 'resultado';
+    }
+
+    function definirCarregando(ativo){
+      consultando = ativo;
+      botao.disabled = ativo;
+      botaoLabel.innerHTML = ativo
+        ? '<span class="spinner-inline" aria-hidden="true"></span>Consultando...'
+        : 'Consultar empresa';
+    }
+
+    // ---------- utilitários de formatação ----------
+    function buscarCampo(objeto, chaves){
+      if (!objeto || typeof objeto !== 'object') return null;
+      var chavesReais = Object.keys(objeto);
+      for (var i = 0; i < chaves.length; i++) {
+        var alvo = chaves[i].toLowerCase();
+        for (var j = 0; j < chavesReais.length; j++) {
+          if (chavesReais[j].toLowerCase() === alvo) {
+            var valor = objeto[chavesReais[j]];
+            if (valor !== undefined && valor !== null && valor !== '') {
+              return { chave: chavesReais[j], valor: valor };
             }
+          }
+        }
+      }
+      return null;
+    }
+
+    function apenasDigitos(str){ return String(str).replace(/\D/g, ''); }
+
+    function formatarCnpjExibicao(valor){
+      var d = apenasDigitos(valor);
+      if (d.length !== 14) return String(valor);
+      return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    }
+
+    function formatarData(valor){
+      var texto = String(valor);
+      var m = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return m[3] + '/' + m[2] + '/' + m[1];
+      return texto;
+    }
+
+    function formatarMoeda(valor){
+      var numero = typeof valor === 'number' ? valor : parseFloat(String(valor).replace(',', '.'));
+      if (isNaN(numero)) return String(valor);
+      try {
+        return numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      } catch (e) {
+        return 'R$ ' + numero.toFixed(2);
+      }
+    }
+
+    function formatarTelefone(valor){
+      var d = apenasDigitos(valor);
+      if (d.length === 10) return '(' + d.slice(0,2) + ') ' + d.slice(2,6) + '-' + d.slice(6);
+      if (d.length === 11) return '(' + d.slice(0,2) + ') ' + d.slice(2,7) + '-' + d.slice(7);
+      return String(valor);
+    }
+
+    function formatarCep(valor){
+      var d = apenasDigitos(valor);
+      if (d.length === 8) return d.slice(0,5) + '-' + d.slice(5);
+      return String(valor);
+    }
+
+    function formatarAtividade(valor){
+      if (valor && typeof valor === 'object' && 'descricao' in valor) return valor.descricao;
+      if (Array.isArray(valor)) {
+        return valor
+          .map(function(item){ return (item && typeof item === 'object' && 'descricao' in item) ? item.descricao : item; })
+          .filter(Boolean)
+          .join(', ');
+      }
+      return String(valor);
+    }
+
+    function rotularChave(chave){
+      var texto = chave
+        .replace(/_/g, ' ')
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .toLowerCase();
+      return texto.charAt(0).toUpperCase() + texto.slice(1);
+    }
+
+    function adicionarItemInfo(rotulo, valor){
+      if (valor === null || valor === undefined || valor === '') return;
+      var item = document.createElement('div');
+      item.className = 'info-item';
+
+      var label = document.createElement('span');
+      label.className = 'info-label';
+      label.textContent = rotulo;
+
+      var val = document.createElement('span');
+      val.className = 'info-valor';
+      val.textContent = valor;
+
+      item.appendChild(label);
+      item.appendChild(val);
+      infoGrid.appendChild(item);
+    }
+
+    // Campos conhecidos (compatíveis com formatos comuns de APIs de CNPJ,
+    // ex.: BrasilAPI e ReceitaWS). O JSON original do backend não é alterado
+    // em nenhum momento — apenas lido e reorganizado visualmente aqui.
+    var CAMPOS_SECUNDARIOS = [
+      { rotulo: 'Nome fantasia', chaves: ['nome_fantasia', 'fantasia', 'nomeFantasia'] },
+      { rotulo: 'Data de abertura', chaves: ['data_inicio_atividade', 'abertura', 'dataAbertura'], formatar: formatarData },
+      { rotulo: 'Natureza jurídica', chaves: ['natureza_juridica', 'naturezaJuridica'] },
+      { rotulo: 'Porte', chaves: ['descricao_porte', 'porte'] },
+      { rotulo: 'Capital social', chaves: ['capital_social', 'capitalSocial'], formatar: formatarMoeda },
+      { rotulo: 'Telefone', chaves: ['ddd_telefone_1', 'telefone', 'phone'], formatar: formatarTelefone },
+      { rotulo: 'E-mail', chaves: ['email'] },
+      { rotulo: 'Atividade principal', chaves: ['atividade_principal', 'cnae_fiscal_descricao'], formatar: formatarAtividade },
+      { rotulo: 'Município', chaves: ['municipio', 'cidade'] },
+      { rotulo: 'UF', chaves: ['uf', 'estado'] },
+      { rotulo: 'CEP', chaves: ['cep'], formatar: formatarCep }
+    ];
+
+    function renderizarResultado(dados){
+      var usadas = {};
+
+      var nome = buscarCampo(dados, ['razao_social', 'nome', 'razaoSocial', 'company_name']);
+      if (nome) usadas[nome.chave] = true;
+      empresaNome.textContent = nome ? nome.valor : 'Empresa consultada';
+
+      var cnpj = buscarCampo(dados, ['cnpj']);
+      if (cnpj) usadas[cnpj.chave] = true;
+      empresaCnpj.textContent = cnpj ? formatarCnpjExibicao(cnpj.valor) : campoCnpj.value;
+
+      var situacao = buscarCampo(dados, ['descricao_situacao_cadastral', 'situacao_cadastral', 'situacao', 'status']);
+      if (situacao) {
+        usadas[situacao.chave] = true;
+        var textoSituacao = String(situacao.valor);
+        empresaSituacao.textContent = textoSituacao;
+        empresaSituacao.hidden = false;
+        var normalizado = textoSituacao.toLowerCase();
+        empresaSituacao.className = 'status-pill ' + (
+          normalizado.indexOf('ativ') !== -1 ? 'ok' :
+          (normalizado.indexOf('baix') !== -1 || normalizado.indexOf('suspens') !== -1 || normalizado.indexOf('inapt') !== -1 || normalizado.indexOf('nul') !== -1) ? 'alerta' :
+          'neutro'
+        );
+      } else {
+        empresaSituacao.hidden = true;
+      }
+
+      infoGrid.innerHTML = '';
+
+      CAMPOS_SECUNDARIOS.forEach(function(campo){
+        var achado = buscarCampo(dados, campo.chaves);
+        if (!achado) return;
+        usadas[achado.chave] = true;
+        var valorFinal = campo.formatar ? campo.formatar(achado.valor) : achado.valor;
+        adicionarItemInfo(campo.rotulo, valorFinal);
+      });
+
+      // Endereço: combina partes comuns em uma única linha legível
+      var logradouro = buscarCampo(dados, ['logradouro']);
+      var numero = buscarCampo(dados, ['numero']);
+      var bairro = buscarCampo(dados, ['bairro']);
+      var partesEndereco = [];
+      [logradouro, numero, bairro].forEach(function(parte){
+        if (parte) { usadas[parte.chave] = true; partesEndereco.push(parte.valor); }
+      });
+      if (partesEndereco.length) {
+        adicionarItemInfo('Endereço', partesEndereco.join(', '));
+      }
+
+      // Qualquer outro campo simples (texto/número/booleano) retornado pela
+      // API e ainda não exibido entra aqui, já com um rótulo legível —
+      // assim nada fica escondido, mas nunca aparece como JSON cru.
+      if (dados && typeof dados === 'object') {
+        Object.keys(dados).forEach(function(chave){
+          if (usadas[chave]) return;
+          var valor = dados[chave];
+          var tipo = typeof valor;
+          if (valor === null || valor === undefined || valor === '') return;
+          if (tipo === 'string' || tipo === 'number' || tipo === 'boolean') {
+            adicionarItemInfo(rotularChave(chave), String(valor));
+          }
         });
-    </script>
+      }
+
+      mostrarEstado('resultado');
+    }
+
+    btnCopiarCnpj.addEventListener('click', function(){
+      var texto = empresaCnpj.textContent;
+      if (!texto || !navigator.clipboard) return;
+      navigator.clipboard.writeText(texto).then(function(){
+        var original = btnCopiarCnpj.textContent;
+        btnCopiarCnpj.textContent = 'Copiado';
+        setTimeout(function(){ btnCopiarCnpj.textContent = original; }, 1500);
+      }).catch(function(){ /* falha silenciosa: cópia é um extra, não essencial */ });
+    });
+
+    // ---------- envio do formulário ----------
+    formulario.addEventListener('submit', function(evento){
+      evento.preventDefault();
+      if (consultando) return;
+
+      var digitos = apenasDigitos(campoCnpj.value);
+      if (digitos.length !== 14) {
+        cnpjErro.hidden = false;
+        campoCnpj.focus();
+        return;
+      }
+      cnpjErro.hidden = true;
+
+      definirCarregando(true);
+      mostrarEstado('carregando');
+
+      fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: tipoConsulta.value,
+          cnpj: campoCnpj.value
+        })
+      })
+        .then(function(resposta){
+          if (!resposta.ok) {
+            return resposta.text().then(function(texto){
+              throw new Error(texto || 'Não foi possível realizar a consulta.');
+            });
+          }
+          return resposta.json();
+        })
+        .then(function(dados){
+          renderizarResultado(dados);
+        })
+        .catch(function(erro){
+          erroMensagem.textContent = (erro && erro.message) ? erro.message : 'Não foi possível realizar a consulta.';
+          mostrarEstado('erro');
+        })
+        .finally(function(){
+          definirCarregando(false);
+        });
+    });
+  })();
+  </script>
 
 </body>
 </html>
